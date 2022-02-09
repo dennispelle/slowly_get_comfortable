@@ -131,7 +131,7 @@ void show_lifesigns(){
 		HAL_GPIO_TogglePin(LED3_GPIO_Port, LED3_Pin);
 	}
 }
-int get_fifo_buffer_length(){
+uint8_t get_fifo_buffer_length(){
 uint8_t n;
         if (fifo_buffer.next<fifo_buffer.last){
         	n = fifo_buffer.next + buffergroesse - fifo_buffer.last +1;
@@ -140,19 +140,36 @@ uint8_t n;
 	}
 	return n;
 }
-void answer_command(){
-	uint8_t n=get_fifo_buffer_length;
-	uint8_t answer[buffergroesse+13]={"\n\rAnswer: "};
-	answer[n+12]= 13;
-	answer[n+11]= 10;
-
-	for (uint8_t t=10;t<n+10;t++){
-		answer[t]=buffer_was_raus();
+uint8_t check_command(uint8_t length){
+	uint8_t answer[length];
+	for (uint8_t i=0;i<length;i++){
+		answer[i]=buffer_was_raus();
 	}
+
+	if (strcasecmp(answer,"doit")){
+		return 1;
+	}else{
+		return 0;
+	}
+
+
+}
+void answer_command(){
+	uint8_t n=get_fifo_buffer_length();
+	uint8_t cmd=check_command(n);
+	if(fifo_buffer.changed){
+		switch (cmd){
+			case 1:
+				CDC_Transmit_FS("\n\r I will do it \n\r what next? \n\r", strlen("\n\r I will do it \n\r what next? \n\r"));
+				break;
+			case 0:
+				CDC_Transmit_FS("\n\r I am confused \n\r try again \n\r", strlen("\n\r I am confused \n\r try again \n\r"));
+				break;
+		}
+	}
+			
 	if((fifo_buffer.next==fifo_buffer.last) && (fifo_buffer.changed)){
 		fifo_buffer.changed=0;
-		CDC_Transmit_FS(answer, 15+n);
-
 	}
 }
 /* USER CODE END 0 */
