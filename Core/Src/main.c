@@ -131,14 +131,17 @@ void show_lifesigns(){
 		HAL_GPIO_TogglePin(LED3_GPIO_Port, LED3_Pin);
 	}
 }
-
-void answer_command(){
-	uint8_t n;
-	if (fifo_buffer.next<fifo_buffer.last){
-		n = fifo_buffer.next + buffergroesse - fifo_buffer.last +1;
+int get_fifo_buffer_length(){
+uint8_t n;
+        if (fifo_buffer.next<fifo_buffer.last){
+        	n = fifo_buffer.next + buffergroesse - fifo_buffer.last +1;
 	}else{
 		n = fifo_buffer.next - fifo_buffer.last + 1;
 	}
+	return n;
+}
+void answer_command(){
+	uint8_t n=get_fifo_buffer_length;
 	uint8_t answer[buffergroesse+13]={"\n\rAnswer: "};
 	answer[n+12]= 13;
 	answer[n+11]= 10;
