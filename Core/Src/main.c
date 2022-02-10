@@ -208,6 +208,10 @@ void answer_command() {
         fifo_buffer.changed=0;
     }
 }
+uint16_t ads8689(){
+// Hier soll die Funktion für den SPI-ADC ads8689 hin. Dieser Text dient auch dazu, etwas pushwürdiges für git zu erzeugen.
+
+}
 /* USER CODE END 0 */
 
 /**
