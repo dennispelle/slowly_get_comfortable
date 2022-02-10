@@ -140,30 +140,66 @@ uint8_t n;
 	}
 	return n;
 }
+#define input_1 "do 1"
+#define input_2 "do 2"
+#define input_3 "do 3"
+#define input_4 "do 4"
+#define input_5 "do 5"
+
 uint8_t check_command(uint8_t length){
 	uint8_t answer[length];
 	for (uint8_t i=0;i<length;i++){
 		answer[i]=buffer_was_raus();
 	}
 
-	if (strcasecmp(answer,"doit")){
+	if 	 (!strcmp(answer,input_1)){
 		return 1;
+	}else if (!strcmp(answer,input_2)){
+		return 2;
+	}else if (!strcmp(answer,input_3)){
+		return 3;
+	}else if (!strcmp(answer,input_4)){
+		return 4;
+	}else if (!strcmp(answer,input_5)){
+		return 5;
 	}else{
 		return 0;
 	}
 
 
 }
+#define response_1 "\n\r I got a one \n\r what next? \n\r"
+#define response_2 "\n\r I got a two \n\r what next? \n\r"
+#define response_3 "\n\r I got a three \n\r what next? \n\r"
+#define response_4 "\n\r I got a four \n\r what next? \n\r"
+#define response_5 "\n\r I got a fife \n\r what next? \n\r"
+#define response_d "\n\r I am confused \n\r try again \n\r"
 void answer_command(){
 	uint8_t n=get_fifo_buffer_length();
 	uint8_t cmd=check_command(n);
 	if(fifo_buffer.changed){
 		switch (cmd){
 			case 1:
-				CDC_Transmit_FS("\n\r I will do it \n\r what next? \n\r", strlen("\n\r I will do it \n\r what next? \n\r"));
+				CDC_Transmit_FS(response_1, strlen(response_1));
+				blink_green(1);
+				break;
+			case 2: 
+				CDC_Transmit_FS(response_2, strlen(response_2));
+				blink_green(0);
+	                        break;
+			case 3: 
+				CDC_Transmit_FS(response_3, strlen(response_3));
+				blink_blue(1);
+	                        break;
+			case 4: 
+				CDC_Transmit_FS(response_4, strlen(response_4));
+				blink_blue(0);
+	                        break;
+			case 5:
+				CDC_Transmit_FS(response_5, strlen(response_5));
 				break;
 			case 0:
-				CDC_Transmit_FS("\n\r I am confused \n\r try again \n\r", strlen("\n\r I am confused \n\r try again \n\r"));
+				CDC_Transmit_FS(response_d, strlen(response_d));
 				break;
 		}
 	}
