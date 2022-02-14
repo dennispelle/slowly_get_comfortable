@@ -263,12 +263,13 @@ void show_commands(){
 #define response_done "\n\r done reading\n\r"
 #define response_d "\n\r invalid input \n\r try help\n\r"
 void show_data(){
+	    // Diese funktion soll die gemessenen Daten anzeigen
             CDC_Transmit_FS(response_show_bits, strlen(response_show_bits));
-	    HAL_Delay(10);
+	    HAL_Delay(usb_delay);
 	    CDC_Transmit_FS(datenpaket.bit,strlen(datenpaket.bit));
-	    HAL_Delay(10);
+	    HAL_Delay(usb_delay);
 	    CDC_Transmit_FS(response_show_bytes,strlen(response_show_bytes));
-	    HAL_Delay(10);
+	    HAL_Delay(usb_delay);
 	    CDC_Transmit_FS(datenpaket.byte,strlen(datenpaket.byte));
 
 }
