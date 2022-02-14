@@ -52,7 +52,7 @@ struct fifo_buffer {
     uint8_t next;
     uint8_t last;
     uint8_t changed;
-} fifo_buffer = {{}, 0, 0};
+} fifo_buffer = {{}, 0, 0, 0};
 
 struct datenpaket{
 	uint8_t bit[32];
@@ -60,7 +60,7 @@ struct datenpaket{
 	uint8_t byte[4];
 	uint16_t dbyte[2];
        	uint32_t qbyte;
-} datenpaket = {{},{},{},0};
+} datenpaket = {{},{},{},{},0};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -152,7 +152,7 @@ uint8_t get_fifo_buffer_length() {
 }
 #define input_help "help"
 #define input_calc "calc"
-#define input_3 "do 3"
+#define input_3 "clock"
 #define input_4 "do 4"
 #define input_read "read"
 #define input_show "show"
@@ -207,59 +207,61 @@ void calculate_data(){
 	}
 }
 
-#define clock_ms 500
-#define waitingtime 500
-void start_reading_AiSpi(){
+
+#define waitingtime 100
+void start_reading_Spi(){
 	//Diese Funktion soll den SPI_sensor auslesen
+	static uint16_t clock_ms=10;
 	blink_green(1);
 	blink_blue(0);
 	HAL_Delay(waitingtime);
 	blink_green(0);
 	for (uint8_t i=0;i<32;i++){
 		// 0=aus,1=an,2=switch on/off
-		blink_blue(2);
+		blink_blue(1);
 		HAL_Delay(clock_ms/2);
 		// schreibe den input an die stelle i von datenpaket;
 		datenpaket.bit[i]=read_input();
 		HAL_Delay(clock_ms/2);
+		blink_blue(0);
+		HAL_Delay(clock_ms);
 	}
 	blink_green(1);
 }
-
-void new_line(){
-	CDC_Transmit_FS("\n\r",strlen("\n\r"));
-}
-
 #define usb_delay 1
+void write_new_line_usb(uint8_t wait){
+	// springt in nächste zeile und an den Anfang. bei 0 
+	if (wait){	
+	HAL_Delay(usb_delay);
+	}
+	CDC_Transmit_FS("\n\r",strlen("\n\r"));
+	if (wait){	
+	HAL_Delay(usb_delay);
+	}
+}
+
 void show_commands(){
-	HAL_Delay(usb_delay);
+	// diese Funktion listet alle möglichen Befehlseingaben auf
 	CDC_Transmit_FS(input_help,strlen(input_help));
-	HAL_Delay(usb_delay);
-	new_line();
-	HAL_Delay(usb_delay);
+	write_new_line_usb(1);
 	CDC_Transmit_FS(input_read,strlen(input_read));
-	HAL_Delay(usb_delay);
-	new_line();
-	HAL_Delay(usb_delay);
+	write_new_line_usb(1);
 	CDC_Transmit_FS(input_calc,strlen(input_calc));
-	HAL_Delay(usb_delay);
-	new_line();
-	HAL_Delay(usb_delay);
+	write_new_line_usb(1);
 	CDC_Transmit_FS(input_show,strlen(input_show));
-	HAL_Delay(usb_delay);
-	new_line();
+	write_new_line_usb(1);
 }
 
 
 
 
-#define response_1 "\n\r do you want your mommy?\n\r stop wining, these commands are implemented:\n\r"
-#define response_2 "\n\r I calculate measurement\n\r"
-#define response_3 "\n\r I got a three \n\r what next?\n\r"
+#define response_1 "\n\r these commands are implemented:\n\r"
+#define response_2 "\n\r calculate measurement\n\r"
+#define response_3 "\n\r new clock speed[ms]: "
 #define response_4 "\n\r I got a four \n\r what next?\n\r"
 #define response_show_bits "\n\r received bits:\n\r"
 #define response_show_bytes "\n\r received bytes:"
-#define response_read "\n\r strarting reading routine\n\r"
+#define response_read "\n\r starting reading routine\n\r"
 #define response_done "\n\r done reading\n\r"
 #define response_d "\n\r invalid input \n\r try help\n\r"
 void show_data(){
@@ -268,10 +270,12 @@ void show_data(){
 	    HAL_Delay(usb_delay);
 	    CDC_Transmit_FS(datenpaket.bit,strlen(datenpaket.bit));
 	    HAL_Delay(usb_delay);
+	    write_new_line_usb(0);
+	    /*
 	    CDC_Transmit_FS(response_show_bytes,strlen(response_show_bytes));
 	    HAL_Delay(usb_delay);
 	    CDC_Transmit_FS(datenpaket.byte,strlen(datenpaket.byte));
-
+	*/
 }
 
 void answer_command() {
@@ -297,7 +301,7 @@ void answer_command() {
             break;
         case 5:
             CDC_Transmit_FS(response_read, strlen(response_read));
-            start_reading_AiSpi();
+            start_reading_Spi();
             CDC_Transmit_FS(response_done, strlen(response_done));
             break;
         case 6:
@@ -358,10 +362,10 @@ int main(void)
   /* USER CODE BEGIN WHILE */
     while (1)
     {
-        // Lebenszeichen durch LED3 und ". . . . . ." über USB to serial
+        // Lebenszeichen durch blinken(rot) der LED3
         show_lifesigns();
 
-        // USB_buffer ind Ringbuffer übertragen
+        // USB_buffer in Ringbuffer übertragen
         check_usb_buffer();
 
         // Eingegangene Befehle beantworten
