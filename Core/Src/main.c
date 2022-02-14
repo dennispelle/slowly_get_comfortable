@@ -54,13 +54,14 @@ struct fifo_buffer {
     uint8_t changed;
 } fifo_buffer = {{}, 0, 0, 0};
 
+
+#define clk_speed 25
+#define wait_time 500
 struct datenpaket{
 	uint8_t bit[32];
-	uint8_t hbyte[8];
-	uint8_t byte[4];
-	uint16_t dbyte[2];
-       	uint32_t qbyte;
-} datenpaket = {{},{},{},{},0};
+	uint16_t clk;
+	uint16_t wait;
+} datenpaket = {{}, clk_speed, wait_time};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -152,12 +153,13 @@ uint8_t get_fifo_buffer_length() {
 }
 #define input_help "help"
 #define input_calc "calc"
-#define input_3 "clock"
+#define input_clock "clock"
 #define input_4 "do 4"
 #define input_read "read"
 #define input_show "show"
 
-uint8_t check_command(uint8_t length) {
+uint8_t check_command() {
+    uint8_t length=get_fifo_buffer_length();
     uint8_t answer[length];
     for (uint8_t i=0; i<length; i++) {
         answer[i]=buffer_was_raus();
@@ -167,7 +169,7 @@ uint8_t check_command(uint8_t length) {
         return 1;
     } else if (!strcmp(answer,input_calc)) {
         return 2;
-    } else if (!strcmp(answer,input_3)) {
+    } else if (!strcmp(answer,input_clock)) {
         return 3;
     } else if (!strcmp(answer,input_4)) {
         return 4;
@@ -181,26 +183,30 @@ uint8_t check_command(uint8_t length) {
 
 
 }
-
-void calculate_data(){
-	// hier werden die eingelesenen datenbits konvertriert
-	//leere die datenpaketstruktur, das müsste eigentlich schneller gehen, aber schneller dauerte länger als das hier zu tippen.
-	datenpaket.byte[0]=0;
-	datenpaket.byte[1]=0;
-	datenpaket.byte[2]=0;
-	datenpaket.byte[3]=0;
-	//fülle hbytes
-
-
-	// fülle bytes
-	for (uint8_t j=0;j<4;j++){
-		for (uint8_t i=0;i<8;i++){ 
-			uint8_t k=i+j*8;
-			uint8_t l=(1<<i);
-			datenpaket.byte[j]+=datenpaket.bit[k]*(1<<i);
-		}
+uint16_t check_number(){
+	// diese funktion übersetzt eingaben in Integer;
+    uint8_t length=get_fifo_buffer_length();
+    uint8_t answer[length];
+    uint16_t translation=0;
+    for (uint8_t i=0; i<length; i++) {
+        answer[i]=buffer_was_raus();
+    }
+    for (uint8_t i=0; i<length; i++) {
+        if(answer[i]>=47 && answer[i]<=57){
+		buffer_was_rein(answer[i]);
 	}
+    }
+    length=get_fifo_buffer_length();
+    for (uint8_t i=0; i<length; i++) {
+        answer[i]=buffer_was_raus()-47;
+	translation+=answer[i]*(1<<i);
+    }
+    return translation;
+
 	
+}
+void calculate_data(){
+	// hier werden die eingelesenen datenbits zu chars konvertriert
 	for (uint8_t j=0;j<32;j++){
 		// mach aus True and False '0' und '1'
 		datenpaket.bit[j]+=48;
@@ -208,23 +214,27 @@ void calculate_data(){
 }
 
 
-#define waitingtime 100
 void start_reading_Spi(){
-	//Diese Funktion soll den SPI_sensor auslesen
-	static uint16_t clock_ms=10;
+	//Diese Funktion soll den SPI_sensor auslesen;
+	uint32_t tick_time=HAL_GetTick();
 	blink_green(1);
 	blink_blue(0);
-	HAL_Delay(waitingtime);
+	while(HAL_GetTick()-tick_time<datenpaket.wait){}
+	tick_time=HAL_GetTick();
 	blink_green(0);
 	for (uint8_t i=0;i<32;i++){
 		// 0=aus,1=an,2=switch on/off
 		blink_blue(1);
-		HAL_Delay(clock_ms/2);
+		while(HAL_GetTick()-tick_time<datenpaket.clk){}
+		tick_time=HAL_GetTick();
 		// schreibe den input an die stelle i von datenpaket;
 		datenpaket.bit[i]=read_input();
-		HAL_Delay(clock_ms/2);
+		while(HAL_GetTick()-tick_time<datenpaket.clk){}
+		tick_time=HAL_GetTick();
 		blink_blue(0);
-		HAL_Delay(clock_ms);
+		while(HAL_GetTick()-tick_time<datenpaket.clk*2){}
+		tick_time=HAL_GetTick();
+		
 	}
 	blink_green(1);
 }
@@ -250,6 +260,8 @@ void show_commands(){
 	write_new_line_usb(1);
 	CDC_Transmit_FS(input_show,strlen(input_show));
 	write_new_line_usb(1);
+	CDC_Transmit_FS(input_clock,strlen(input_clock));
+	write_new_line_usb(1);
 }
 
 
@@ -257,8 +269,8 @@ void show_commands(){
 
 #define response_1 "\n\r these commands are implemented:\n\r"
 #define response_2 "\n\r calculate measurement\n\r"
-#define response_3 "\n\r new clock speed[ms]: "
-#define response_4 "\n\r I got a four \n\r what next?\n\r"
+#define response_3 "\n\r new clock setting[ms]: "
+#define response_4 "\n\r confirmed new clock setting\n\r"
 #define response_show_bits "\n\r received bits:\n\r"
 #define response_show_bytes "\n\r received bytes:"
 #define response_read "\n\r starting reading routine\n\r"
@@ -279,8 +291,7 @@ void show_data(){
 }
 
 void answer_command() {
-    uint8_t n=get_fifo_buffer_length();
-    uint8_t cmd=check_command(n);
+    uint8_t cmd=check_command();
     if(fifo_buffer.changed) {
         switch (cmd) {
         case 1:
@@ -292,12 +303,18 @@ void answer_command() {
 	    calculate_data();
             break;
         case 3:
+	    // neue clk einstellungen
             CDC_Transmit_FS(response_3, strlen(response_3));
-            blink_blue(1);
-            break;
-        case 4:
+	   	
+		while(fifo_buffer.data[fifo_buffer.last]==0){
+			check_usb_buffer();
+			datenpaket.clk=check_number();
+		}
+	    //bestätigung neuer clk einstellung
             CDC_Transmit_FS(response_4, strlen(response_4));
-            blink_blue(0);
+	    break;
+        case 4:
+	
             break;
         case 5:
             CDC_Transmit_FS(response_read, strlen(response_read));
@@ -307,7 +324,10 @@ void answer_command() {
         case 6:
 	    show_data();
 	    break;
-        case 0:
+	case 0:
+            CDC_Transmit_FS(response_d, strlen(response_d));
+            break;
+        default:
             CDC_Transmit_FS(response_d, strlen(response_d));
             break;
         }
