@@ -305,8 +305,8 @@ void answer_command() {
         case 3:
 	    // neue clk einstellungen
             CDC_Transmit_FS(response_3, strlen(response_3));
-	   	
-		while(fifo_buffer.data[fifo_buffer.last]==0){
+	   //das funktioniert nicht wie es soll :(	
+		while(fifo_buffer.next==fifo_buffer.last){
 			check_usb_buffer();
 			datenpaket.clk=check_number();
 		}
