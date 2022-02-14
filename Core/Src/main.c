@@ -53,6 +53,14 @@ struct fifo_buffer {
     uint8_t last;
     uint8_t changed;
 } fifo_buffer = {{}, 0, 0};
+
+struct datenpaket{
+	uint8_t bit[32];
+	uint8_t hbyte[8];
+	uint8_t byte[4];
+	uint16_t dbyte[2];
+       	uint32_t qbyte;
+} datenpaket = {{},{},{},0};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -114,16 +122,18 @@ void blink_green(int power) {
     HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, power);
 }
 void blink_blue(int power) {
-    HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, power);
+	if (power==2){
+		HAL_GPIO_TogglePin(LED2_GPIO_Port,LED2_Pin);
+	}else{	
+    	HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, power);
+	}
 }
 void blink_red(int power) {
-    HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, power);
+    	HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, power);
 }
-int button1_pressed;
-void  HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin_irgendwas) {
-    button1_pressed=1;
+uint8_t read_input(){
+    return HAL_GPIO_ReadPin(Button1_GPIO_Port, Button1_Pin);
 }
-
 void show_lifesigns() {
     static uint32_t time;
     if((HAL_GetTick()-time)>1000) {
@@ -140,40 +150,129 @@ uint8_t get_fifo_buffer_length() {
     }
     return n;
 }
-#define input_1 "do 1"
-#define input_2 "do 2"
+#define input_help "help"
+#define input_calc "calc"
 #define input_3 "do 3"
 #define input_4 "do 4"
-#define input_5 "do 5"
+#define input_read "read"
+#define input_show "show"
 
 uint8_t check_command(uint8_t length) {
     uint8_t answer[length];
     for (uint8_t i=0; i<length; i++) {
         answer[i]=buffer_was_raus();
     }
-
-    if 	 (!strcmp(answer,input_1)) {
+	// vergleich der eingaben mit den vordefinierten befehlen
+    if 	 (!strcmp(answer,input_help)) {
         return 1;
-    } else if (!strcmp(answer,input_2)) {
+    } else if (!strcmp(answer,input_calc)) {
         return 2;
     } else if (!strcmp(answer,input_3)) {
         return 3;
     } else if (!strcmp(answer,input_4)) {
         return 4;
-    } else if (!strcmp(answer,input_5)) {
+    } else if (!strcmp(answer,input_read)) {
         return 5;
+    } else if (!strcmp(answer,input_show)) {
+        return 6;
     } else {
         return 0;
     }
 
 
 }
-#define response_1 "\n\r I got a one \n\r what next? \n\r"
-#define response_2 "\n\r I got a two \n\r what next? \n\r"
-#define response_3 "\n\r I got a three \n\r what next? \n\r"
-#define response_4 "\n\r I got a four \n\r what next? \n\r"
-#define response_5 "\n\r I got a fife \n\r what next? \n\r"
-#define response_d "\n\r I am confused \n\r try again \n\r"
+
+void calculate_data(){
+	// hier werden die eingelesenen datenbits konvertriert
+	//leere die datenpaketstruktur, das müsste eigentlich schneller gehen, aber schneller dauerte länger als das hier zu tippen.
+	datenpaket.byte[0]=0;
+	datenpaket.byte[1]=0;
+	datenpaket.byte[2]=0;
+	datenpaket.byte[3]=0;
+	//fülle hbytes
+
+
+	// fülle bytes
+	for (uint8_t j=0;j<4;j++){
+		for (uint8_t i=0;i<8;i++){ 
+			uint8_t k=i+j*8;
+			uint8_t l=(1<<i);
+			datenpaket.byte[j]+=datenpaket.bit[k]*(1<<i);
+		}
+	}
+	
+	for (uint8_t j=0;j<32;j++){
+		// mach aus True and False '0' und '1'
+		datenpaket.bit[j]+=48;
+	}
+}
+
+#define clock_ms 500
+#define waitingtime 500
+void start_reading_AiSpi(){
+	//Diese Funktion soll den SPI_sensor auslesen
+	blink_green(1);
+	blink_blue(0);
+	HAL_Delay(waitingtime);
+	blink_green(0);
+	for (uint8_t i=0;i<32;i++){
+		// 0=aus,1=an,2=switch on/off
+		blink_blue(2);
+		HAL_Delay(clock_ms/2);
+		// schreibe den input an die stelle i von datenpaket;
+		datenpaket.bit[i]=read_input();
+		HAL_Delay(clock_ms/2);
+	}
+	blink_green(1);
+}
+
+void new_line(){
+	CDC_Transmit_FS("\n\r",strlen("\n\r"));
+}
+
+#define usb_delay 1
+void show_commands(){
+	HAL_Delay(usb_delay);
+	CDC_Transmit_FS(input_help,strlen(input_help));
+	HAL_Delay(usb_delay);
+	new_line();
+	HAL_Delay(usb_delay);
+	CDC_Transmit_FS(input_read,strlen(input_read));
+	HAL_Delay(usb_delay);
+	new_line();
+	HAL_Delay(usb_delay);
+	CDC_Transmit_FS(input_calc,strlen(input_calc));
+	HAL_Delay(usb_delay);
+	new_line();
+	HAL_Delay(usb_delay);
+	CDC_Transmit_FS(input_show,strlen(input_show));
+	HAL_Delay(usb_delay);
+	new_line();
+}
+
+
+
+
+#define response_1 "\n\r do you want your mommy?\n\r stop wining, these commands are implemented:\n\r"
+#define response_2 "\n\r I calculate measurement\n\r"
+#define response_3 "\n\r I got a three \n\r what next?\n\r"
+#define response_4 "\n\r I got a four \n\r what next?\n\r"
+#define response_show_bits "\n\r received bits:\n\r"
+#define response_show_bytes "\n\r received bytes:"
+#define response_read "\n\r strarting reading routine\n\r"
+#define response_done "\n\r done reading\n\r"
+#define response_d "\n\r invalid input \n\r try help\n\r"
+void show_data(){
+            CDC_Transmit_FS(response_show_bits, strlen(response_show_bits));
+	    HAL_Delay(10);
+	    CDC_Transmit_FS(datenpaket.bit,strlen(datenpaket.bit));
+	    HAL_Delay(10);
+	    CDC_Transmit_FS(response_show_bytes,strlen(response_show_bytes));
+	    HAL_Delay(10);
+	    CDC_Transmit_FS(datenpaket.byte,strlen(datenpaket.byte));
+
+}
+
 void answer_command() {
     uint8_t n=get_fifo_buffer_length();
     uint8_t cmd=check_command(n);
@@ -181,11 +280,11 @@ void answer_command() {
         switch (cmd) {
         case 1:
             CDC_Transmit_FS(response_1, strlen(response_1));
-            blink_green(1);
+	    show_commands();	
             break;
         case 2:
             CDC_Transmit_FS(response_2, strlen(response_2));
-            blink_green(0);
+	    calculate_data();
             break;
         case 3:
             CDC_Transmit_FS(response_3, strlen(response_3));
@@ -196,8 +295,13 @@ void answer_command() {
             blink_blue(0);
             break;
         case 5:
-            CDC_Transmit_FS(response_5, strlen(response_5));
+            CDC_Transmit_FS(response_read, strlen(response_read));
+            start_reading_AiSpi();
+            CDC_Transmit_FS(response_done, strlen(response_done));
             break;
+        case 6:
+	    show_data();
+	    break;
         case 0:
             CDC_Transmit_FS(response_d, strlen(response_d));
             break;
@@ -208,10 +312,12 @@ void answer_command() {
         fifo_buffer.changed=0;
     }
 }
-uint16_t ads8689(){
-// Hier soll die Funktion für den SPI-ADC ads8689 hin. Dieser Text dient auch dazu, etwas pushwürdiges für git zu erzeugen.
 
-}
+
+
+
+
+
 /* USER CODE END 0 */
 
 /**
@@ -220,35 +326,35 @@ uint16_t ads8689(){
   */
 int main(void)
 {
-    /* USER CODE BEGIN 1 */
+  /* USER CODE BEGIN 1 */
 
-    /* USER CODE END 1 */
+  /* USER CODE END 1 */
 
-    /* MCU Configuration--------------------------------------------------------*/
+  /* MCU Configuration--------------------------------------------------------*/
 
-    /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-    HAL_Init();
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
 
-    /* USER CODE BEGIN Init */
+  /* USER CODE BEGIN Init */
 
-    /* USER CODE END Init */
+  /* USER CODE END Init */
 
-    /* Configure the system clock */
-    SystemClock_Config();
+  /* Configure the system clock */
+  SystemClock_Config();
 
-    /* USER CODE BEGIN SysInit */
+  /* USER CODE BEGIN SysInit */
 
-    /* USER CODE END SysInit */
+  /* USER CODE END SysInit */
 
-    /* Initialize all configured peripherals */
-    MX_GPIO_Init();
-    MX_USB_DEVICE_Init();
-    /* USER CODE BEGIN 2 */
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_USB_DEVICE_Init();
+  /* USER CODE BEGIN 2 */
 
-    /* USER CODE END 2 */
+  /* USER CODE END 2 */
 
-    /* Infinite loop */
-    /* USER CODE BEGIN WHILE */
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
     while (1)
     {
         // Lebenszeichen durch LED3 und ". . . . . ." über USB to serial
@@ -260,11 +366,11 @@ int main(void)
         // Eingegangene Befehle beantworten
         answer_command();
 
-        /* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
-        /* USER CODE BEGIN 3 */
+    /* USER CODE BEGIN 3 */
     }
-    /* USER CODE END 3 */
+  /* USER CODE END 3 */
 }
 
 /**
@@ -273,50 +379,50 @@ int main(void)
   */
 void SystemClock_Config(void)
 {
-    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-    /** Configure the main internal regulator output voltage
-    */
-    if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
-    {
-        Error_Handler();
-    }
-    /** Initializes the RCC Oscillators according to the specified parameters
-    * in the RCC_OscInitTypeDef structure.
-    */
-    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
-    RCC_OscInitStruct.LSEState = RCC_LSE_OFF;
-    RCC_OscInitStruct.MSIState = RCC_MSI_ON;
-    RCC_OscInitStruct.MSICalibrationValue = 0;
-    RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_6;
-    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_MSI;
-    RCC_OscInitStruct.PLL.PLLM = 1;
-    RCC_OscInitStruct.PLL.PLLN = 40;
-    RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-    RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
-    RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
-    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-    {
-        Error_Handler();
-    }
-    /** Initializes the CPU, AHB and APB buses clocks
-    */
-    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                                  |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  /** Configure the main internal regulator output voltage
+  */
+  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.LSEState = RCC_LSE_OFF;
+  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
+  RCC_OscInitStruct.MSICalibrationValue = 0;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_6;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_MSI;
+  RCC_OscInitStruct.PLL.PLLM = 1;
+  RCC_OscInitStruct.PLL.PLLN = 40;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+  RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
+  RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
-    {
-        Error_Handler();
-    }
-    /** Enable MSI Auto calibration
-    */
-    HAL_RCCEx_EnableMSIPLLMode();
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Enable MSI Auto calibration
+  */
+  HAL_RCCEx_EnableMSIPLLMode();
 }
 
 /* USER CODE BEGIN 4 */
@@ -329,13 +435,13 @@ void SystemClock_Config(void)
   */
 void Error_Handler(void)
 {
-    /* USER CODE BEGIN Error_Handler_Debug */
+  /* USER CODE BEGIN Error_Handler_Debug */
     /* User can add his own implementation to report the HAL error return state */
     __disable_irq();
     while (1)
     {
     }
-    /* USER CODE END Error_Handler_Debug */
+  /* USER CODE END Error_Handler_Debug */
 }
 
 #ifdef  USE_FULL_ASSERT
@@ -348,10 +454,10 @@ void Error_Handler(void)
   */
 void assert_failed(uint8_t *file, uint32_t line)
 {
-    /* USER CODE BEGIN 6 */
+  /* USER CODE BEGIN 6 */
     /* User can add his own implementation to report the file name and line number,
        ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-    /* USER CODE END 6 */
+  /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
 

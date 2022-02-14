@@ -145,8 +145,6 @@ USBD_CDC_ItfTypeDef USBD_Interface_fops_FS =
 };
 
 /* Private functions ---------------------------------------------------------*/
-
-
 /**
   * @brief  Initializes the CDC media low layer over the FS USB IP
   * @retval USBD_OK if all operations are OK else USBD_FAIL
@@ -260,7 +258,7 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
   * @param  Len: Number of data received (in bytes)
   * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
   */
-#define buffergroesse 64 		//wie viele speicherplätze bekommt der ringbuffer?
+#define buffergroesse 64
 extern uint8_t bufferdata[buffergroesse];
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
