@@ -55,11 +55,11 @@ struct fifo_buffer {
 } fifo_buffer = {{}, 0, 0, 0};
 
 
-#define clk_speed 25
+#define clk_speed 1
 #define wait_time 500
 struct datenpaket{
 	uint8_t bit[32];
-	uint16_t clk;
+	uint32_t clk;
 	uint16_t wait;
 } datenpaket = {{}, clk_speed, wait_time};
 /* USER CODE END PV */
@@ -151,12 +151,12 @@ uint8_t get_fifo_buffer_length() {
     }
     return n;
 }
-#define input_help "help"
-#define input_calc "calc"
-#define input_clock "clock"
-#define input_4 "do 4"
-#define input_read "read"
-#define input_show "show"
+#define input_help "help" 	// 1
+#define input_calc "calc" 	// 2
+#define input_hclk "half clk" 	// 3
+#define input_dclk "double clk" // 4
+#define input_read "read" 	// 5
+#define input_show "show" 	// 6
 
 uint8_t check_command() {
     uint8_t length=get_fifo_buffer_length();
@@ -169,9 +169,9 @@ uint8_t check_command() {
         return 1;
     } else if (!strcmp(answer,input_calc)) {
         return 2;
-    } else if (!strcmp(answer,input_clock)) {
+    } else if (!strcmp(answer,input_hclk)) {
         return 3;
-    } else if (!strcmp(answer,input_4)) {
+    } else if (!strcmp(answer,input_dclk)) {
         return 4;
     } else if (!strcmp(answer,input_read)) {
         return 5;
@@ -183,28 +183,25 @@ uint8_t check_command() {
 
 
 }
-uint16_t check_number(){
-	// diese funktion übersetzt eingaben in Integer;
-    uint8_t length=get_fifo_buffer_length();
-    uint8_t answer[length];
-    uint16_t translation=0;
-    for (uint8_t i=0; i<length; i++) {
-        answer[i]=buffer_was_raus();
-    }
-    for (uint8_t i=0; i<length; i++) {
-        if(answer[i]>=47 && answer[i]<=57){
-		buffer_was_rein(answer[i]);
+uint8_t half_clkspeed(){
+	// diese funktion prüft, ob der clk durch 2 teilbar ist und wenn ja, teilt es ihn durch 2;
+	if (datenpaket.clk%2){
+		return 0;
+	} else {
+		datenpaket.clk/=2;
+		return 1;
 	}
-    }
-    length=get_fifo_buffer_length();
-    for (uint8_t i=0; i<length; i++) {
-        answer[i]=buffer_was_raus()-47;
-	translation+=answer[i]*(1<<i);
-    }
-    return translation;
-
 	
 }
+uint8_t double_clkspeed(){
+	if (datenpaket.clk>(1<<30)){
+		return 0;
+	} else {
+		datenpaket.clk*=2;
+		return 1;
+	}
+} 
+
 void calculate_data(){
 	// hier werden die eingelesenen datenbits zu chars konvertriert
 	for (uint8_t j=0;j<32;j++){
@@ -219,7 +216,7 @@ void start_reading_Spi(){
 	uint32_t tick_time=HAL_GetTick();
 	blink_green(1);
 	blink_blue(0);
-	while(HAL_GetTick()-tick_time<datenpaket.wait){}
+	while(HAL_GetTick()-tick_time<datenpaket.wait){/*do nothing*/}
 	tick_time=HAL_GetTick();
 	blink_green(0);
 	for (uint8_t i=0;i<32;i++){
@@ -260,7 +257,9 @@ void show_commands(){
 	write_new_line_usb(1);
 	CDC_Transmit_FS(input_show,strlen(input_show));
 	write_new_line_usb(1);
-	CDC_Transmit_FS(input_clock,strlen(input_clock));
+	CDC_Transmit_FS(input_hclk,strlen(input_hclk));
+	write_new_line_usb(1);
+	CDC_Transmit_FS(input_dclk,strlen(input_dclk));
 	write_new_line_usb(1);
 }
 
@@ -269,10 +268,12 @@ void show_commands(){
 
 #define response_1 "\n\r these commands are implemented:\n\r"
 #define response_2 "\n\r calculate measurement\n\r"
-#define response_3 "\n\r new clock setting[ms]: "
-#define response_4 "\n\r confirmed new clock setting\n\r"
+#define response_hclk "\n\r half clockspeed \n\r" 		// case 3
+#define response_no_hclk "\n\r can't half clockspeed \n\r" 	// case 3
+#define response_dclk "\n\r double clockspeed \n\r"
+#define response_no_dclk "\n\r can't double clockspeed \n\r"
 #define response_show_bits "\n\r received bits:\n\r"
-#define response_show_bytes "\n\r received bytes:"
+
 #define response_read "\n\r starting reading routine\n\r"
 #define response_done "\n\r done reading\n\r"
 #define response_d "\n\r invalid input \n\r try help\n\r"
@@ -283,11 +284,6 @@ void show_data(){
 	    CDC_Transmit_FS(datenpaket.bit,strlen(datenpaket.bit));
 	    HAL_Delay(usb_delay);
 	    write_new_line_usb(0);
-	    /*
-	    CDC_Transmit_FS(response_show_bytes,strlen(response_show_bytes));
-	    HAL_Delay(usb_delay);
-	    CDC_Transmit_FS(datenpaket.byte,strlen(datenpaket.byte));
-	*/
 }
 
 void answer_command() {
@@ -303,18 +299,20 @@ void answer_command() {
 	    calculate_data();
             break;
         case 3:
-	    // neue clk einstellungen
-            CDC_Transmit_FS(response_3, strlen(response_3));
-	   //das funktioniert nicht wie es soll :(	
-		while(fifo_buffer.next==fifo_buffer.last){
-			check_usb_buffer();
-			datenpaket.clk=check_number();
-		}
-	    //bestätigung neuer clk einstellung
-            CDC_Transmit_FS(response_4, strlen(response_4));
+	    // clk halbieren wenn möglich 
+	    if (half_clkspeed()){
+            	CDC_Transmit_FS(response_hclk, strlen(response_hclk));
+	    } else {
+            	CDC_Transmit_FS(response_no_hclk, strlen(response_no_hclk));
+	    }
 	    break;
         case 4:
-	
+	    // clk verdoppeln wenn möglich
+	    if (half_clkspeed()){
+            	CDC_Transmit_FS(response_dclk, strlen(response_dclk));
+	    } else {
+            	CDC_Transmit_FS(response_no_dclk, strlen(response_no_dclk));
+	    }
             break;
         case 5:
             CDC_Transmit_FS(response_read, strlen(response_read));
