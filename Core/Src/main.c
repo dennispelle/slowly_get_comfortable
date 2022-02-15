@@ -183,7 +183,7 @@ uint8_t check_command() {
 
 
 }
-uint8_t half_clkspeed(){
+uint8_t half_clktime(){
 	// diese funktion prüft, ob der clk durch 2 teilbar ist und wenn ja, teilt es ihn durch 2;
 	if (datenpaket.clk%2){
 		return 0;
@@ -193,7 +193,7 @@ uint8_t half_clkspeed(){
 	}
 	
 }
-uint8_t double_clkspeed(){
+uint8_t double_clktime(){
 	if (datenpaket.clk>(1<<30)){
 		return 0;
 	} else {
@@ -268,10 +268,10 @@ void show_commands(){
 
 #define response_1 "\n\r these commands are implemented:\n\r"
 #define response_2 "\n\r calculate measurement\n\r"
-#define response_hclk "\n\r half clockspeed \n\r" 		// case 3
-#define response_no_hclk "\n\r can't half clockspeed \n\r" 	// case 3
-#define response_dclk "\n\r double clockspeed \n\r"
-#define response_no_dclk "\n\r can't double clockspeed \n\r"
+#define response_hclk "\n\r half clocktime \n\r" 		// case 3
+#define response_no_hclk "\n\r can't half clocktime \n\r" 	// case 3
+#define response_dclk "\n\r double clocktime \n\r"
+#define response_no_dclk "\n\r can't double clocktime \n\r"
 #define response_show_bits "\n\r received bits:\n\r"
 
 #define response_read "\n\r starting reading routine\n\r"
@@ -292,7 +292,7 @@ void answer_command() {
         switch (cmd) {
         case 1:
             CDC_Transmit_FS(response_1, strlen(response_1));
-	    show_commands();	
+	    show_commands();
             break;
         case 2:
             CDC_Transmit_FS(response_2, strlen(response_2));
@@ -300,7 +300,7 @@ void answer_command() {
             break;
         case 3:
 	    // clk halbieren wenn möglich 
-	    if (half_clkspeed()){
+	    if (half_clktime()){
             	CDC_Transmit_FS(response_hclk, strlen(response_hclk));
 	    } else {
             	CDC_Transmit_FS(response_no_hclk, strlen(response_no_hclk));
@@ -308,7 +308,7 @@ void answer_command() {
 	    break;
         case 4:
 	    // clk verdoppeln wenn möglich
-	    if (double_clkspeed()){
+	    if (double_clktime()){
             	CDC_Transmit_FS(response_dclk, strlen(response_dclk));
 	    } else {
             	CDC_Transmit_FS(response_no_dclk, strlen(response_no_dclk));
@@ -318,6 +318,8 @@ void answer_command() {
             CDC_Transmit_FS(response_read, strlen(response_read));
             start_reading_Spi();
             CDC_Transmit_FS(response_done, strlen(response_done));
+	    calculate_data();
+	    show_data();
             break;
         case 6:
 	    show_data();
