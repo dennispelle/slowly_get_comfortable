@@ -308,7 +308,7 @@ void answer_command() {
 	    break;
         case 4:
 	    // clk verdoppeln wenn möglich
-	    if (half_clkspeed()){
+	    if (double_clkspeed()){
             	CDC_Transmit_FS(response_dclk, strlen(response_dclk));
 	    } else {
             	CDC_Transmit_FS(response_no_dclk, strlen(response_no_dclk));
