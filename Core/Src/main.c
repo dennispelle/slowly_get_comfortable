@@ -55,13 +55,13 @@ struct fifo_buffer {
 } fifo_buffer = {{}, 0, 0, 0};
 
 
-#define clk_speed 1
-#define wait_time 500
+#define clk_time 1 // in millisekunden
+#define wait_time 500 // in millisekunden
 struct datenpaket{
-	uint8_t bit[32];
+	char bit[32];
 	uint32_t clk;
-	uint16_t wait;
-} datenpaket = {{}, clk_speed, wait_time};
+	uint32_t wait;
+} datenpaket = {{}, clk_time, wait_time};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -151,16 +151,22 @@ uint8_t get_fifo_buffer_length() {
     }
     return n;
 }
-#define input_help "help" 	// 1
+void print_usb(char string[64]){
+	uint16_t stringlength = strlen(string);
+	CDC_Transmit_FS(string,stringlength);
+}
+
+#define input_help "help"  	// 1
 #define input_calc "calc" 	// 2
-#define input_hclk "half clk" 	// 3
-#define input_dclk "double clk" // 4
+#define input_hclk "hclk" 	// 3
+#define input_dclk "dclk" // 4
 #define input_read "read" 	// 5
 #define input_show "show" 	// 6
 
 uint8_t check_command() {
+
     uint8_t length=get_fifo_buffer_length();
-    uint8_t answer[length];
+    char answer[length];
     for (uint8_t i=0; i<length; i++) {
         answer[i]=buffer_was_raus();
     }
@@ -205,8 +211,10 @@ uint8_t double_clktime(){
 void calculate_data(){
 	// hier werden die eingelesenen datenbits zu chars konvertriert
 	for (uint8_t j=0;j<32;j++){
-		// mach aus True and False '0' und '1'
-		datenpaket.bit[j]+=48;
+		// mach aus True and False '1' und '0'
+		if (datenpaket.bit[j]<2){
+			datenpaket.bit[j]+=48;
+		}
 	}
 }
 
@@ -219,6 +227,7 @@ void start_reading_Spi(){
 	while(HAL_GetTick()-tick_time<datenpaket.wait){/*do nothing*/}
 	tick_time=HAL_GetTick();
 	blink_green(0);
+	// timer interrupt!
 	for (uint8_t i=0;i<32;i++){
 		// 0=aus,1=an,2=switch on/off
 		blink_blue(1);
@@ -241,7 +250,7 @@ void write_new_line_usb(uint8_t wait){
 	if (wait){	
 	HAL_Delay(usb_delay);
 	}
-	CDC_Transmit_FS("\n\r",strlen("\n\r"));
+	print_usb("\n\r");
 	if (wait){	
 	HAL_Delay(usb_delay);
 	}
@@ -249,17 +258,17 @@ void write_new_line_usb(uint8_t wait){
 
 void show_commands(){
 	// diese Funktion listet alle möglichen Befehlseingaben auf
-	CDC_Transmit_FS(input_help,strlen(input_help));
+	print_usb(input_help);
 	write_new_line_usb(1);
-	CDC_Transmit_FS(input_read,strlen(input_read));
+	print_usb(input_read);//umcasten auf irgerndwas
 	write_new_line_usb(1);
-	CDC_Transmit_FS(input_calc,strlen(input_calc));
+	print_usb(input_calc);
 	write_new_line_usb(1);
-	CDC_Transmit_FS(input_show,strlen(input_show));
+	print_usb(input_show);
 	write_new_line_usb(1);
-	CDC_Transmit_FS(input_hclk,strlen(input_hclk));
+	print_usb(input_hclk);
 	write_new_line_usb(1);
-	CDC_Transmit_FS(input_dclk,strlen(input_dclk));
+	print_usb(input_dclk);
 	write_new_line_usb(1);
 }
 
@@ -279,9 +288,9 @@ void show_commands(){
 #define response_d "\n\r invalid input \n\r try help\n\r"
 void show_data(){
 	    // Diese funktion soll die gemessenen Daten anzeigen
-            CDC_Transmit_FS(response_show_bits, strlen(response_show_bits));
+	    print_usb(response_show_bits);
 	    HAL_Delay(usb_delay);
-	    CDC_Transmit_FS(datenpaket.bit,strlen(datenpaket.bit));
+	    print_usb(datenpaket.bit);
 	    HAL_Delay(usb_delay);
 	    write_new_line_usb(0);
 }
@@ -291,44 +300,44 @@ void answer_command() {
     if(fifo_buffer.changed) {
         switch (cmd) {
         case 1:
-            CDC_Transmit_FS(response_1, strlen(response_1));
+        	print_usb(response_1);
 	    show_commands();
             break;
         case 2:
-            CDC_Transmit_FS(response_2, strlen(response_2));
+        	print_usb(response_2);
 	    calculate_data();
             break;
         case 3:
 	    // clk halbieren wenn möglich 
 	    if (half_clktime()){
-            	CDC_Transmit_FS(response_hclk, strlen(response_hclk));
+	    	print_usb(response_hclk);
 	    } else {
-            	CDC_Transmit_FS(response_no_hclk, strlen(response_no_hclk));
+	    	print_usb(response_no_hclk);
 	    }
 	    break;
         case 4:
 	    // clk verdoppeln wenn möglich
 	    if (double_clktime()){
-            	CDC_Transmit_FS(response_dclk, strlen(response_dclk));
+	    	print_usb(response_dclk);
 	    } else {
-            	CDC_Transmit_FS(response_no_dclk, strlen(response_no_dclk));
+	    	print_usb(response_no_dclk);
 	    }
             break;
         case 5:
-            CDC_Transmit_FS(response_read, strlen(response_read));
+        	print_usb(response_read);
             start_reading_Spi();
-            CDC_Transmit_FS(response_done, strlen(response_done));
-	    calculate_data();
-	    show_data();
+            print_usb(response_done);
+            calculate_data();
+            show_data();
             break;
         case 6:
-	    show_data();
+        	show_data();
 	    break;
 	case 0:
-            CDC_Transmit_FS(response_d, strlen(response_d));
+		print_usb(response_d);
             break;
         default:
-            CDC_Transmit_FS(response_d, strlen(response_d));
+        	print_usb(response_d);
             break;
         }
     }
@@ -382,6 +391,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
     while (1)
     {
+    	//wait for interrupt (stromsparen)
+
         // Lebenszeichen durch blinken(rot) der LED3
         show_lifesigns();
 
