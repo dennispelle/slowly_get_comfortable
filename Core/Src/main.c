@@ -153,7 +153,7 @@ uint8_t get_fifo_buffer_length() {
 }
 void print_usb(char string[64]){
 	uint16_t stringlength = strlen(string);
-	CDC_Transmit_FS(string,stringlength);
+	CDC_Transmit_FS((uint8_t*)string,stringlength);
 }
 
 #define input_help "help"  	// 1
